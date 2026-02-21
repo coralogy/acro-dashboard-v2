@@ -17,6 +17,7 @@ DEFAULT_RANGE = "All available"
 
 CREDENTIALS_PATH = os.path.join("secrets", "acrodashboardv2_cred.json")
 
+
 CATEGORY_KEYWORDS = [
     ("standing acrobatics", ["standing acrobatics", "standing acro", "acrobatics"]),
     ("contemporary dance", ["contemporary", "contemp", "contemporary dance"]),
@@ -35,9 +36,7 @@ def normalize_timezone(tz_input: str) -> str:
     return cleaned or "UTC"
 
 
-def get_service() -> "Resource":
-    from google.oauth2 import service_account
-    
+def get_service() -> Resource:
     # Check if running on Streamlit Cloud
     if "credentials" in st.secrets:
         # Running on Streamlit Cloud - use secrets
@@ -48,7 +47,7 @@ def get_service() -> "Resource":
     else:
         # Running locally - use local service account file
         creds = service_account.Credentials.from_service_account_file(
-            CREDENTIALS_PATH, scopes=SCOPES  # This already points to secrets/acrodashboardv2_cred.json
+            CREDENTIALS_PATH, scopes=SCOPES
         )
     
     return build("calendar", "v3", credentials=creds)
