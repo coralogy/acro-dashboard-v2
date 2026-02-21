@@ -41,7 +41,8 @@ watchdog==6.0.0
 ## For Google Auth
 google-auth-oauthlib==1.2.0
 google-auth-httplib2==0.2.0
-google-api-python-client==1.12.5
+google-api-python-client==2.147.0
+setuptools==75.1.0
 
 ## For data visualisation
 plotly==5.18.0
