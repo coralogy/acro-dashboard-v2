@@ -38,19 +38,21 @@ def normalize_timezone(tz_input: str) -> str:
 
 
 def get_service() -> "Resource":
-    creds = None
-    if os.path.exists('acrodashboardv2_cred.json'):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
-
-    if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-    elif not creds:
-        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-        creds = flow.run_local_server(port=0)
-        os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
-        with open(TOKEN_PATH, "w", encoding="utf-8") as token_file:
-            token_file.write(creds.to_json())
-
+    from google.oauth2 import service_account
+    
+    # Check if running on Streamlit Cloud
+    if "credentials" in st.secrets:
+        # Running on Streamlit Cloud - use secrets
+        credentials_dict = dict(st.secrets["credentials"])
+        creds = service_account.Credentials.from_service_account_info(
+            credentials_dict, scopes=SCOPES
+        )
+    else:
+        # Running locally - use local service account file
+        creds = service_account.Credentials.from_service_account_file(
+            CREDENTIALS_PATH, scopes=SCOPES  # This already points to secrets/acrodashboardv2_cred.json
+        )
+    
     return build("calendar", "v3", credentials=creds)
 
 
