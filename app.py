@@ -8,7 +8,6 @@ import streamlit as st
 from dateutil.relativedelta import relativedelta
 from googleapiclient.discovery import build, Resource
 from google.oauth2 import service_account
-from googleapiclient.discovery import build
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 DEFAULT_CALENDAR = "Fitness"
@@ -197,6 +196,14 @@ end_dt = datetime.now(pytz.timezone(tz_name)) + relativedelta(days=1)
 
 try:
     service = get_service()
+
+    # DEBUG - See what calendars are visible to the service account
+    calendar_list = service.calendarList().list().execute()
+    st.write("DEBUG - Visible calendars:", [c.get("summary") for c in calendar_list.get("items", [])])
+    st.write("DEBUG - Service account email:", 
+             st.secrets.get("credentials", {}).get("client_email") if "credentials" in st.secrets 
+             else "Check secrets/acrodashboardv2_cred.json")
+    
     calendar_id = resolve_calendar_id(service, calendar_name)
     events = fetch_events(
         service,
