@@ -195,8 +195,6 @@ else:
 
 end_dt = datetime.now(pytz.timezone(tz_name)) + relativedelta(days=1)
 
-st.info("If this is your first run, a browser window will open for Google approval.")
-
 try:
     service = get_service()
     calendar_id = resolve_calendar_id(service, calendar_name)
