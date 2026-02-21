@@ -6,6 +6,8 @@ acrodashboardv2_cred.json
 secrets/
 secrets/token.json
 token.json
+.streamlit/secrets.toml
+.streamlit/
 
 # Python
 .venv/
