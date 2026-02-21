@@ -6,9 +6,8 @@ import plotly.express as px
 import pytz
 import streamlit as st
 from dateutil.relativedelta import relativedelta
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build, Resource
+from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
@@ -17,7 +16,6 @@ DEFAULT_TIMEZONE = "Asia/Singapore"
 DEFAULT_RANGE = "All available"
 
 CREDENTIALS_PATH = os.path.join("secrets", "acrodashboardv2_cred.json")
-TOKEN_PATH = os.path.join("secrets", "token.json")
 
 CATEGORY_KEYWORDS = [
     ("standing acrobatics", ["standing acrobatics", "standing acro", "acrobatics"]),
