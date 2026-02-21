@@ -1,1 +1,10 @@
 acrodashboardv2_cred.json
+
+#Secrets
+secrets/
+secrets/token.json
+token.json
+
+# Python
+.venv/
+venv/
