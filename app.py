@@ -186,10 +186,6 @@ with st.sidebar:
         st.write("Edit these in the code if your class titles differ.")
         st.write({category: keywords for category, keywords in CATEGORY_KEYWORDS})
 
-if not os.path.exists(CREDENTIALS_PATH):
-    st.error(f"Credentials file not found: {CREDENTIALS_PATH}")
-    st.stop()
-
 if range_choice == "Last 12 months":
     start_dt = datetime.now(pytz.timezone(tz_name)) - relativedelta(months=12)
 elif range_choice == "Last 24 months":
