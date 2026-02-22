@@ -35,7 +35,16 @@ def normalize_timezone(tz_input: str) -> str:
 
 
 def get_service() -> Resource:
-    # Check if running on Streamlit Cloud
+    creds = service_account.Credentials.from_service_account_file(
+            CREDENTIALS_PATH, scopes=SCOPES
+        )
+    service = build("calendar", "v3", credentials=creds)
+    events = service.events().list(
+    calendarId="primary",
+    maxResults=10
+).execute()
+    st.write("DEBUG - Sample events fetched successfully:", len(events.get("items", [])))
+    """# Check if running on Streamlit Cloud
     if "credentials" in st.secrets:
         st.write("Using Streamlit Cloud secrets for authentication.")
         # Running on Streamlit Cloud - use secrets
@@ -43,7 +52,7 @@ def get_service() -> Resource:
         creds = service_account.Credentials.from_service_account_info(
             credentials_dict, scopes=SCOPES
         )
-        print(creds.service_account_email)
+        st.write(creds.service_account_email)
     else:
         # Running locally - use local service account file
         creds = service_account.Credentials.from_service_account_file(
@@ -51,7 +60,7 @@ def get_service() -> Resource:
         )
         st.write("Using local service account credentials. Make sure the file exists and is correctly configured.")
     
-    return build("calendar", "v3", credentials=creds)
+    return build("calendar", "v3", credentials=creds)"""
 
 
 def resolve_calendar_id(service, calendar_name: str) -> str:
@@ -197,7 +206,8 @@ calendar_name = st.text_input("Calendar name", value=DEFAULT_CALENDAR)
 
 try:
     service = get_service()
-    st.write("hello")
+    calendar_list = service.calendarList().list().execute()
+    st.write("DEBUG - API call successful! Calendars found:", len(calendar_list.get("items", [])))
     # DEBUG - See what calendars are visible to the service account
     calendar_list = service.calendarList().list().execute()
     st.write("DEBUG - Visible calendars:", [c.get("summary") for c in calendar_list.get("items", [])])
