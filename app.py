@@ -7,14 +7,18 @@ import pytz
 import streamlit as st
 from dateutil.relativedelta import relativedelta
 from googleapiclient.discovery import build, Resource
-from google.oauth2 import service_account
+
+# google OAuth
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 DEFAULT_CALENDAR = "Fitness"
 DEFAULT_TIMEZONE = "Asia/Singapore"
 DEFAULT_RANGE = "All available"
-CREDENTIALS_PATH = os.path.join("secrets", "acrodashboardv2_cred.json")
-
+CLIENT_SECRET_PATH = os.path.join("secrets", "client_secret.json")
+TOKEN_PATH = os.path.join("secrets", "token.json")
 
 CATEGORY_KEYWORDS = [
     ("standing acrobatics", ["standing acrobatics", "standing acro", "acrobatics"]),
@@ -35,38 +39,24 @@ def normalize_timezone(tz_input: str) -> str:
 
 
 def get_service() -> Resource:
-    creds = service_account.Credentials.from_service_account_file(
-            CREDENTIALS_PATH, scopes=SCOPES
-        )
+    creds = None
+    if os.path.exists(TOKEN_PATH):
+        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+ 
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_PATH, SCOPES)
+            creds = flow.run_local_server(port=0)
+        with open(TOKEN_PATH, "w") as token_file:
+            token_file.write(creds.to_json())
     service = build("calendar", "v3", credentials=creds)
-    events = service.events().list(
-    calendarId="primary",
-    maxResults=10
-).execute()
-    st.write("DEBUG - Sample events fetched successfully:", len(events.get("items", [])))
-    """# Check if running on Streamlit Cloud
-    if "credentials" in st.secrets:
-        st.write("Using Streamlit Cloud secrets for authentication.")
-        # Running on Streamlit Cloud - use secrets
-        credentials_dict = dict(st.secrets["credentials"])
-        creds = service_account.Credentials.from_service_account_info(
-            credentials_dict, scopes=SCOPES
-        )
-        st.write(creds.service_account_email)
-    else:
-        # Running locally - use local service account file
-        creds = service_account.Credentials.from_service_account_file(
-            CREDENTIALS_PATH, scopes=SCOPES
-        )
-        st.write("Using local service account credentials. Make sure the file exists and is correctly configured.")
-    
-    return build("calendar", "v3", credentials=creds)"""
-
+    return service
 
 def resolve_calendar_id(service, calendar_name: str) -> str:
-
-
     page_token = None
+    calendar_list = None #suggested by vibe
     while True:
         calendar_list = service.calendarList().list(pageToken=page_token).execute()
         for entry in calendar_list.get("items", []):
@@ -79,7 +69,8 @@ def resolve_calendar_id(service, calendar_name: str) -> str:
     available = [c.get("summary", "") for c in calendar_list.get("items", [])]
     if len(available) == 0:
         raise ValueError("No calendars found for the service account.")
-    return available
+        raise ValueError(f"Calendar '{calendar_name}' not found. Available: {available}")  # CHANGE THIS LINE
+    # return available
 
 def fetch_events(service, calendar_id: str, time_min: str, time_max: str) -> list[dict]:
     events = []
