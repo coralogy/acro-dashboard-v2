@@ -170,7 +170,6 @@ end_dt = datetime.now(pytz.timezone(tz_name)) + relativedelta(days=1)
 
 try:
     service = get_service()
-    st.write("DEBUG - API_KEY loaded:", API_KEY[:20] if API_KEY else "NOT FOUND")
     calendar_id = CALENDAR_ID 
 
     events = fetch_events(
