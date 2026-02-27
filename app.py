@@ -15,7 +15,7 @@ SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 DEFAULT_CALENDAR = "Acro dashboard"
 DEFAULT_TIMEZONE = "Asia/Singapore"
 DEFAULT_RANGE = "All available"
-API_KEY = st.secrets.get("GOOGLE_API_KEY")  # Use secrets in production
+API_KEY = st.secrets["GOOGLE_API_KEY"]  # Use secrets in production
 CALENDAR_ID = "c9818e9ca3bed4795137692d62986c957dab16f568697938a04832f19a4ea4b8@group.calendar.google.com"  # Replace with your calendar ID
 
 CATEGORY_KEYWORDS = [
@@ -168,8 +168,9 @@ include_all_day = False
 start_dt = datetime(2000, 1, 1, tzinfo=pytz.timezone(tz_name))
 end_dt = datetime.now(pytz.timezone(tz_name)) + relativedelta(days=1)
 
-try: #THESE ARE FOR SERVICE ACCOUNTS.
+try:
     service = get_service()
+    st.write("DEBUG - API_KEY loaded:", API_KEY[:20] if API_KEY else "NOT FOUND")
     calendar_id = CALENDAR_ID 
 
     events = fetch_events(
