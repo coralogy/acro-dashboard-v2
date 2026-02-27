@@ -1,24 +1,22 @@
 import os
 from datetime import datetime
+from googleapiclient.discovery import build
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
+
 import pytz
 import streamlit as st
 from dateutil.relativedelta import relativedelta
-from googleapiclient.discovery import build, Resource
 
-# google OAuth
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
-DEFAULT_CALENDAR = "Fitness"
+DEFAULT_CALENDAR = "Acro dashboard"
 DEFAULT_TIMEZONE = "Asia/Singapore"
 DEFAULT_RANGE = "All available"
-CLIENT_SECRET_PATH = os.path.join("secrets", "client_secret.json")
-TOKEN_PATH = os.path.join("secrets", "token.json")
+API_KEY = st.secrets.get("GOOGLE_API_KEY")  # Use secrets in production
+CALENDAR_ID = "c9818e9ca3bed4795137692d62986c957dab16f568697938a04832f19a4ea4b8@group.calendar.google.com"  # Replace with your calendar ID
 
 CATEGORY_KEYWORDS = [
     ("standing acrobatics", ["standing acrobatics", "standing acro", "acrobatics"]),
@@ -38,39 +36,9 @@ def normalize_timezone(tz_input: str) -> str:
     return cleaned or "UTC"
 
 
-def get_service() -> Resource:
-    creds = None
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
- 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_PATH, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(TOKEN_PATH, "w") as token_file:
-            token_file.write(creds.to_json())
-    service = build("calendar", "v3", credentials=creds)
-    return service
-
-def resolve_calendar_id(service, calendar_name: str) -> str:
-    page_token = None
-    calendar_list = None #suggested by vibe
-    while True:
-        calendar_list = service.calendarList().list(pageToken=page_token).execute()
-        for entry in calendar_list.get("items", []):
-            if entry.get("summary", "").strip().lower() == calendar_name.lower():
-                return entry["id"]
-        page_token = calendar_list.get("nextPageToken")
-        if not page_token:
-            break
-
-    available = [c.get("summary", "") for c in calendar_list.get("items", [])]
-    if len(available) == 0:
-        raise ValueError("No calendars found for the service account.")
-        raise ValueError(f"Calendar '{calendar_name}' not found. Available: {available}")  # CHANGE THIS LINE
-    # return available
+def get_service():
+    """Build Google Calendar service with API key (no authentication needed)"""
+    return build("calendar", "v3", developerKey=API_KEY)
 
 def fetch_events(service, calendar_id: str, time_min: str, time_max: str) -> list[dict]:
     events = []
@@ -164,7 +132,6 @@ def aggregate_by_month(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 st.set_page_config(page_title="Cal", layout="wide")
 st.title("Cal")
 st.caption("Pulls Google Calendar events and visualizes class time and frequency.")
-calendar_name = st.text_input("Calendar name", value=DEFAULT_CALENDAR)
 # with st.sidebar:
 #     st.header("Settings")
 #     timezone_input = st.text_input("Timezone", value=DEFAULT_TIMEZONE)
@@ -195,19 +162,16 @@ calendar_name = st.text_input("Calendar name", value=DEFAULT_CALENDAR)
 
 # end_dt = datetime.now(pytz.timezone(tz_name)) + relativedelta(days=1)
 
-try:
+
+tz_name = normalize_timezone(DEFAULT_TIMEZONE)
+include_all_day = False
+start_dt = datetime(2000, 1, 1, tzinfo=pytz.timezone(tz_name))
+end_dt = datetime.now(pytz.timezone(tz_name)) + relativedelta(days=1)
+
+try: #THESE ARE FOR SERVICE ACCOUNTS.
     service = get_service()
-    calendar_list = service.calendarList().list().execute()
-    st.write("DEBUG - API call successful! Calendars found:", len(calendar_list.get("items", [])))
-    # DEBUG - See what calendars are visible to the service account
-    calendar_list = service.calendarList().list().execute()
-    st.write("DEBUG - Visible calendars:", [c.get("summary") for c in calendar_list.get("items", [])])
-    st.write("DEBUG - Service account email:", 
-             st.secrets.get("credentials", {}).get("client_email") if "credentials" in st.secrets 
-             else "Check secrets/acrodashboardv2_cred.json")
-    
-    calendar_id = resolve_calendar_id(service, calendar_name)
-    st.write(f"Using calendar: {calendar_name} (ID: {calendar_id})")
+    calendar_id = CALENDAR_ID 
+
     events = fetch_events(
         service,
         calendar_id=calendar_id,
