@@ -53,6 +53,7 @@ def fetch_events(service, calendar_id: str, time_min: str, time_max: str) -> lis
                 singleEvents=True,
                 orderBy="startTime",
                 pageToken=page_token,
+                fields="nextPageToken,items(summary,start,end,description)",  #test just adding nextPageToken, then maxResults=2500
             )
             .execute()
         )
@@ -87,7 +88,7 @@ def parse_event_datetime(value: dict, tz_name: str) -> tuple[pd.Timestamp, bool]
 def build_dataframe(events: list[dict], tz_name: str) -> pd.DataFrame:
     rows = []
     for event in events:
-        summary = event.get("summary", "(no title)")
+        summary = event.get("summary", "(no title)") #Calendar events should be set to see all event details and not just Free/Busy
         description = event.get("description", "")
         location = event.get("location", "")
         text = " ".join([summary, description, location])
@@ -132,41 +133,41 @@ def aggregate_by_month(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 st.set_page_config(page_title="Cal", layout="wide")
 st.title("Cal")
 st.caption("Pulls Google Calendar events and visualizes class time and frequency.")
-# with st.sidebar:
-#     st.header("Settings")
-#     timezone_input = st.text_input("Timezone", value=DEFAULT_TIMEZONE)
-#     tz_name = normalize_timezone(timezone_input)
-#     try:
-#         pytz.timezone(tz_name)
-#     except pytz.UnknownTimeZoneError:
-#         st.error(f"Unknown timezone '{tz_name}'. Falling back to UTC.")
-#         tz_name = "UTC"
+with st.sidebar:
+    st.header("Settings")
+    timezone_input = st.text_input("Timezone", value=DEFAULT_TIMEZONE)
+    tz_name = normalize_timezone(timezone_input)
+    try:
+        pytz.timezone(tz_name)
+    except pytz.UnknownTimeZoneError:
+        st.error(f"Unknown timezone '{tz_name}'. Falling back to UTC.")
+        tz_name = "UTC"
 
-#     range_choice = st.selectbox(
-#         "Date range",
-#         options=["Last 12 months", "Last 24 months", "All available"],
-#         index=["Last 12 months", "Last 24 months", "All available"].index(DEFAULT_RANGE),
-#     )
-#     include_all_day = st.checkbox("Include all-day events", value=False)
+    range_choice = st.selectbox(
+        "Date range",
+        options=["Last 12 months", "Last 24 months", "All available"],
+        index=["Last 12 months", "Last 24 months", "All available"].index(DEFAULT_RANGE),
+    )
+    include_all_day = st.checkbox("Include all-day events", value=False)
 
-#     with st.expander("Category keywords"):
-#         st.write("Edit these in the code if your class titles differ.")
-#         st.write({category: keywords for category, keywords in CATEGORY_KEYWORDS})
+    with st.expander("Category keywords"):
+        st.write("Edit these in the code if your class titles differ.")
+        st.write({category: keywords for category, keywords in CATEGORY_KEYWORDS})
 
-# if range_choice == "Last 12 months":
-#     start_dt = datetime.now(pytz.timezone(tz_name)) - relativedelta(months=12)
-# elif range_choice == "Last 24 months":
-#     start_dt = datetime.now(pytz.timezone(tz_name)) - relativedelta(months=24)
-# else:
-#     start_dt = datetime(2000, 1, 1, tzinfo=pytz.timezone(tz_name))
+if range_choice == "Last 12 months":
+    start_dt = datetime.now(pytz.timezone(tz_name)) - relativedelta(months=12)
+elif range_choice == "Last 24 months":
+    start_dt = datetime.now(pytz.timezone(tz_name)) - relativedelta(months=24)
+else:
+    start_dt = datetime(2000, 1, 1, tzinfo=pytz.timezone(tz_name))
 
-# end_dt = datetime.now(pytz.timezone(tz_name)) + relativedelta(days=1)
-
-
-tz_name = normalize_timezone(DEFAULT_TIMEZONE)
-include_all_day = False
-start_dt = datetime(2000, 1, 1, tzinfo=pytz.timezone(tz_name))
 end_dt = datetime.now(pytz.timezone(tz_name)) + relativedelta(days=1)
+
+
+# tz_name = normalize_timezone(DEFAULT_TIMEZONE)
+# include_all_day = False
+# start_dt = datetime(2000, 1, 1, tzinfo=pytz.timezone(tz_name))
+# end_dt = datetime.now(pytz.timezone(tz_name)) + relativedelta(days=1)
 
 try:
     service = get_service()
@@ -186,6 +187,10 @@ if not events:
     st.warning("No events found for the selected range.")
     st.stop()
 
+# # DEBUG LINE
+# st.write("Raw API events (first 3):")
+# st.write(events[:3])
+
 df = build_dataframe(events, tz_name)
 if not include_all_day:
     df = df[~df["all_day"]]
@@ -195,6 +200,11 @@ if df.empty:
     st.stop()
 
 hours_df, counts_df = aggregate_by_month(df)
+
+st.write("Raw event data (first 3):")
+st.write(df.head(3))
+st.write("Sample event summaries:")
+st.write(df[["summary", "category"]].head(10))
 
 col1, col2 = st.columns(2)
 with col1:
