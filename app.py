@@ -133,26 +133,31 @@ def aggregate_by_month(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 st.set_page_config(page_title="Cal", layout="wide")
 st.title("Cal")
 st.caption("Pulls Google Calendar events and visualizes class time and frequency.")
-with st.sidebar:
-    st.header("Settings")
-    timezone_input = st.text_input("Timezone", value=DEFAULT_TIMEZONE)
-    tz_name = normalize_timezone(timezone_input)
-    try:
-        pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        st.error(f"Unknown timezone '{tz_name}'. Falling back to UTC.")
-        tz_name = "UTC"
 
-    range_choice = st.selectbox(
-        "Date range",
-        options=["Last 12 months", "Last 24 months", "All available"],
-        index=["Last 12 months", "Last 24 months", "All available"].index(DEFAULT_RANGE),
-    )
-    include_all_day = st.checkbox("Include all-day events", value=False)
+tz_name = DEFAULT_TIMEZONE  # "Asia/Singapore"
+range_choice = DEFAULT_RANGE  # "All available"
+include_all_day = False
 
-    with st.expander("Category keywords"):
-        st.write("Edit these in the code if your class titles differ.")
-        st.write({category: keywords for category, keywords in CATEGORY_KEYWORDS})
+# with st.sidebar:
+#     st.header("Settings")
+#     timezone_input = st.text_input("Timezone", value=DEFAULT_TIMEZONE)
+#     tz_name = normalize_timezone(timezone_input)
+#     try:
+#         pytz.timezone(tz_name)
+#     except pytz.UnknownTimeZoneError:
+#         st.error(f"Unknown timezone '{tz_name}'. Falling back to UTC.")
+#         tz_name = "UTC"
+
+#     range_choice = st.selectbox(
+#         "Date range",
+#         options=["Last 12 months", "Last 24 months", "All available"],
+#         index=["Last 12 months", "Last 24 months", "All available"].index(DEFAULT_RANGE),
+#     )
+#     include_all_day = st.checkbox("Include all-day events", value=False)
+
+#     with st.expander("Category keywords"):
+#         st.write("Edit these in the code if your class titles differ.")
+#         st.write({category: keywords for category, keywords in CATEGORY_KEYWORDS})
 
 if range_choice == "Last 12 months":
     start_dt = datetime.now(pytz.timezone(tz_name)) - relativedelta(months=12)
@@ -187,10 +192,6 @@ if not events:
     st.warning("No events found for the selected range.")
     st.stop()
 
-# # DEBUG LINE
-# st.write("Raw API events (first 3):")
-# st.write(events[:3])
-
 df = build_dataframe(events, tz_name)
 if not include_all_day:
     df = df[~df["all_day"]]
@@ -199,36 +200,68 @@ if df.empty:
     st.warning("No events left after filtering. Try including all-day events.")
     st.stop()
 
-hours_df, counts_df = aggregate_by_month(df)
+df = df.copy()
+df["month_label"] = df["start"].dt.to_period("M").astype(str)
+selected_months = st.multiselect("Select months", options=sorted(df["month_label"].unique()), default=sorted(df["month_label"].unique())[-3:]) #most recent month
+df_view = df[df["month_label"].isin(selected_months)]
+if df_view.empty:
+    st.warning("No data for selected month(s)")
+    st.stop()
 
-st.write("Raw event data (first 3):")
-st.write(df.head(3))
-st.write("Sample event summaries:")
-st.write(df[["summary", "category"]].head(10))
+hours_df, counts_df = aggregate_by_month(df_view)
 
+k1, k2, k3 = hours_df["duration_hours"].sum(), counts_df["class_count"].sum(), hours_df["duration_hours"].mean()
+cols = st.columns(3)
+cols[0].metric("Total Hours", f"{k1:.1f}")
+cols[1].metric("Total Classes", f"{k2}")
+cols[2].metric("Avg Hours/Month", f"{k3:.1f}")
+
+fig_pie = px.pie(hours_df, values="duration_hours", names="category", title="Hours by Category")
+st.plotly_chart(fig_pie, use_container_width=True)
+
+st.markdown("### Classes and Hours by Month and Category")
 col1, col2 = st.columns(2)
-with col1:
-    fig_hours = px.bar(
-        hours_df,
-        x="month",
-        y="duration_hours",
-        color="category",
-        title="Hours per Month by Category",
-        labels={"duration_hours": "Hours", "month": "Month"},
-    )
-    st.plotly_chart(fig_hours, use_container_width=True)
+fig_bar = px.bar(counts_df, x="month", y="class_count", color="category", title="Classes per Month by Category")
+col1.plotly_chart(fig_bar, use_container_width=True)
+fig_line = px.line(hours_df, x="month", y="duration_hours", color="category", title="Hours per Month by Category")
+col2.plotly_chart(fig_line, use_container_width=True)
 
-with col2:
-    fig_counts = px.line(
-        counts_df,
-        x="month",
-        y="class_count",
-        color="category",
-        title="Class Frequency per Month by Category",
-        labels={"class_count": "Classes", "month": "Month"},
-        markers=True,
-    )
-    st.plotly_chart(fig_counts, use_container_width=True)
+st.markdown("### Intensity Heatmap")
+intensity_mode = st.selectbox("Intensity view", [
+    "Weekday x Hour (Class count)",
+    "Weekday x Hour (Hours)",
+    "Month x Weekday (Class count)"
+])
 
-st.subheader("Raw data")
-st.dataframe(df.sort_values("start"), use_container_width=True)
+tmp = df_view.copy()
+tmp["weekday"] = pd.Categorical(tmp["start"].dt.day_name(), categories=[
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+], ordered=True)
+tmp["hour"] = tmp["start"].dt.hour
+
+if intensity_mode == "Weekday x Hour (Class count)":
+    pivot = tmp.groupby(["weekday", "hour"]).size().unstack(fill_value=0)
+    title = "Class Count by Weekday and Hour"
+elif intensity_mode == "Weekday x Hour (Hours)":
+    pivot = tmp.groupby(["weekday", "hour"])["duration_hours"].sum().unstack(fill_value=0)
+    title = "Hours by Weekday and Hour"
+else:  # Month x Weekday (Class count)
+    tmp["month"] = tmp["start"].dt.to_period("M").astype(str)
+    pivot = tmp.groupby(["month", "weekday"]).size().unstack(fill_value=0)
+    title = "Class Count by Month and Weekday"
+
+fig_heat = px.imshow(pivot,
+                    labels=dict(x="Hour" if intensity_mode != "Month x Weekday (Class count)" else "Weekday",
+                                y="Weekday" if intensity_mode != "Month x Weekday (Class count)" else "Month",
+                                color="Count"),
+                    x=pivot.columns if intensity_mode != "Month x Weekday (Class count)" else pivot.columns,
+                    y=pivot.index,
+                    aspect="auto",
+                    color_continuous_scale="YlOrRd",
+                    title=title)
+st.plotly_chart(fig_heat, use_container_width=True)
+
+# st.dataframe(df_view.sort_values("start"))
+
+# st.subheader("Raw data")
+# st.dataframe(df.sort_values("start"), use_container_width=True)
